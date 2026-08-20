@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Leaf Runner</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; background: #0d1f12; overflow: hidden;
+    height: 100%; font-family: -apple-system, Arial, sans-serif;
+  }
+  #wrap { position: relative; width: 100vw; height: 100vh; }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  #topbar {
+    position: absolute; top: 10px; left: 12px; right: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+    color: #d9f5d3; font-size: 14px; text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  }
+  #topbar .stat { display: flex; gap: 14px; align-items: center; }
+  #topbar b { color: #ffe27a; }
+  #topbar button {
+    background: rgba(0,0,0,0.35); color: #d9f5d3; border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 8px; padding: 6px 10px; font-size: 13px; margin-left: 6px; cursor: pointer;
+  }
+  #score {
+    position: absolute; top: 46px; right: 14px;
+    color: #b6f2b0; font-size: 20px; font-weight: bold;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  }
+  #hint {
+    position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+    color: #cfe9c9; font-size: 13px; text-align: center; text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    width: 90%;
+  }
+  #gameover {
+    position: absolute; top: 36%; left: 50%; transform: translate(-50%, -50%);
+    color: #ffffff; text-align: center; display: none;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.7);
+  }
+  #gameover .title { font-size: 26px; font-weight: bold; }
+  #gameover .sub { font-size: 15px; margin-top: 8px; color: #cfe9c9; }
+  #gameover .coins { font-size: 16px; margin-top: 6px; color: #ffe27a; }
+  #gameover .buttons { margin-top: 16px; display: flex; gap: 10px; justify-content: center; }
+  #gameover button {
+    background: rgba(0,0,0,0.4); color: #fff; border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 10px; padding: 10px 16px; font-size: 14px; cursor: pointer;
+  }
+
+  .overlay {
+    position: absolute; inset: 0; background: rgba(8,18,10,0.92);
+    display: none; align-items: center; justify-content: center; z-index: 20;
+  }
+  .panel {
+    background: #142c1a; border: 1px solid rgba(255,255,255,0.15); border-radius: 14px;
+    padding: 22px; width: min(340px, 86%); max-height: 80vh; overflow-y: auto;
+    color: #e6f5e2; box-shadow: 0 10px 30px rgba(0,0,0,0.5); position: relative;
+  }
+  .panel h2 { margin: 0 0 14px; font-size: 18px; color: #ffe27a; text-align: center; }
+  .panel input[type=text] {
+    width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.06);
+    color: #fff; font-size: 15px; margin-bottom: 12px;
+  }
+  .panel button.primary {
+    width: 100%; padding: 11px; border-radius: 8px; border: none;
+    background: #4caf50; color: #08240c; font-weight: bold; font-size: 15px; cursor: pointer;
+  }
+  .panel button.secondary {
+    width: 100%; padding: 9px; border-radius: 8px; margin-top: 8px;
+    background: transparent; border: 1px solid rgba(255,255,255,0.25); color: #cfe9c9;
+    font-size: 13px; cursor: pointer;
+  }
+  .lb-row {
+    display: flex; justify-content: space-between; padding: 8px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 14px;
+  }
+  .lb-row .rank { color: #8fbf8a; width: 26px; }
+  .lb-row .name { flex: 1; }
+  .lb-row .pts { color: #ffe27a; font-weight: bold; }
+  .lb-status { text-align: center; color: #8fbf8a; font-size: 13px; padding: 12px 0; }
+
+  .shop-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 6px; border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .shop-item .swatch {
+    width: 26px; height: 26px; border-radius: 50%; margin-right: 10px; flex-shrink: 0;
+    border: 2px solid rgba(255,255,255,0.4);
+  }
+  .shop-item .info { display: flex; align-items: center; flex: 1; font-size: 14px; }
+  .shop-item button {
+    padding: 7px 12px; border-radius: 8px; border: none; font-size: 12px; cursor: pointer;
+    background: #4caf50; color: #08240c; font-weight: bold;
+  }
+  .shop-item button:disabled { background: #555; color: #aaa; }
+  .shop-item button.equipped { background: #ffe27a; }
+
+  .closeX {
+    position: absolute; top: 10px; right: 14px; font-size: 20px; color: #cfe9c9; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <div id="topbar">
+    <div class="stat">👤 <span id="unameLabel">player</span></div>
+    <div class="stat">🪙 <b id="coinLabel">0</b>
+      <button id="btnStore">Store</button>
+      <button id="btnBoard">Leaderboard</button>
+    </div>
+  </div>
+  <div id="score">0</div>
+  <div id="hint">TAP / SPACE / UP ARROW to jump &middot; hold to jump higher</div>
+
+  <div id="gameover">
+    <div class="title">GAME OVER</div>
+    <div class="sub" id="finalScore">Score: 0</div>
+    <div class="coins" id="coinsEarned">+0 coins</div>
+    <div class="buttons">
+      <button id="btnRestart">Play again</button>
+      <button id="btnBoard2">Leaderboard</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="usernameOverlay">
+    <div class="panel">
+      <h2>Choose your runner name</h2>
+      <input type="text" id="usernameInput" maxlength="16" placeholder="e.g. GreenGoblin">
+      <button class="primary" id="usernameSave">Let's go</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="storeOverlay">
+    <div class="panel">
+      <span class="closeX" data-close="storeOverlay">✕</span>
+      <h2>Leaf store</h2>
+      <div id="shopList"></div>
+      <button class="secondary" data-close="storeOverlay">Close</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="boardOverlay">
+    <div class="panel">
+      <span class="closeX" data-close="boardOverlay">✕</span>
+      <h2>Global leaderboard</h2>
+      <div id="lbList"><div class="lb-status">Loading…</div></div>
+      <button class="secondary" data-close="boardOverlay">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ======= CONFIG — set this to your Firebase project ID ======= */
+const FIREBASE_PROJECT_ID = "leaf-runner";
+/* =============================================================== */
+
+(function() {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const gameoverEl = document.getElementById('gameover');
+  const finalScoreEl = document.getElementById('finalScore');
+  const coinsEarnedEl = document.getElementById('coinsEarned');
+  const coinLabel = document.getElementById('coinLabel');
+  const unameLabel = document.getElementById('unameLabel');
+
+  const STORAGE_KEY = 'leafRunnerPlayer';
+  function loadPlayerData() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return { username: '', coins: 0, best: 0, owned: ['classic'], equipped: 'classic' };
+  }
+  function savePlayerData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(pdata)); }
+  let pdata = loadPlayerData();
+
+  const SKINS = [
+    { id: 'classic', name: 'Classic green', color: '#7ee08a', cost: 0 },
+    { id: 'purple',  name: 'Purple haze',   color: '#b57ee0', cost: 50 },
+    { id: 'gold',    name: 'Golden leaf',   color: '#ffd24c', cost: 120 },
+    { id: 'blue',    name: 'Blue dream',    color: '#6cc7f2', cost: 200 },
+    { id: 'fire',    name: 'Fire leaf',     color: '#ff7a4c', cost: 300 }
+  ];
+  function currentColor() {
+    const skin = SKINS.find(s => s.id === pdata.equipped) || SKINS[0];
+    return skin.color;
+  }
+
+  function refreshTopbar() {
+    unameLabel.textContent = pdata.username || 'player';
+    coinLabel.textContent = pdata.coins;
+  }
+
+  const usernameOverlay = document.getElementById('usernameOverlay');
+  const usernameInput = document.getElementById('usernameInput');
+  document.getElementById('usernameSave').addEventListener('click', () => {
+    const val = usernameInput.value.trim();
+    if (!val) { usernameInput.style.borderColor = '#e24b4a'; return; }
+    pdata.username = val.slice(0, 16);
+    savePlayerData();
+    usernameOverlay.style.display = 'none';
+    refreshTopbar();
+  });
+  if (!pdata.username) usernameOverlay.style.display = 'flex';
+  usernameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('usernameSave').click();
+  });
+
+  const storeOverlay = document.getElementById('storeOverlay');
+  const shopList = document.getElementById('shopList');
+  function renderShop() {
+    shopList.innerHTML = '';
+    SKINS.forEach(skin => {
+      const owned = pdata.owned.includes(skin.id);
+      const equipped = pdata.equipped === skin.id;
+      const row = document.createElement('div');
+      row.className = 'shop-item';
+      row.innerHTML = `
+        <div class="info">
+          <div class="swatch" style="background:${skin.color}"></div>
+          <div>${skin.name}${skin.cost > 0 ? '<br><span style="color:#8fbf8a;font-size:12px">' + skin.cost + ' coins</span>' : ''}</div>
+        </div>
+      `;
+      const btn = document.createElement('button');
+      if (equipped) {
+        btn.textContent = 'Equipped'; btn.disabled = true; btn.className = 'equipped';
+      } else if (owned) {
+        btn.textContent = 'Equip';
+        btn.onclick = () => { pdata.equipped = skin.id; savePlayerData(); renderShop(); };
+      } else {
+        btn.textContent = 'Buy';
+        btn.disabled = pdata.coins < skin.cost;
+        btn.onclick = () => {
+          if (pdata.coins >= skin.cost) {
+            pdata.coins -= skin.cost;
+            pdata.owned.push(skin.id);
+            pdata.equipped = skin.id;
+            savePlayerData(); refreshTopbar(); renderShop();
+          }
+        };
+      }
+      row.appendChild(btn);
+      shopList.appendChild(row);
+    });
+  }
+  document.getElementById('btnStore').addEventListener('click', () => {
+    renderShop();
+    storeOverlay.style.display = 'flex';
+  });
+
+  const boardOverlay = document.getElementById('boardOverlay');
+  const lbList = document.getElementById('lbList');
+
+  async function fetchLeaderboard() {
+    if (FIREBASE_PROJECT_ID === 'YOUR_PROJECT_ID_HERE') {
+      lbList.innerHTML = '<div class="lb-status">Leaderboard not configured yet.</div>';
+      return;
+    }
+    lbList.innerHTML = '<div class="lb-status">Loading…</div>';
+    try {
+      const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents:runQuery`;
+      const body = {
+        structuredQuery: {
+          from: [{ collectionId: 'scores' }],
+          orderBy: [{ field: { fieldPath: 'score' }, direction: 'DESCENDING' }],
+          limit: 10
+        }
+      };
+      const res = await fetch(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      const rows = (data || [])
+        .filter(d => d.document)
+        .map(d => {
+          const f = d.document.fields;
+          return {
+            username: f.username ? f.username.stringValue : '???',
+            score: f.score ? parseInt(f.score.integerValue, 10) : 0
+          };
+        });
+      if (!rows.length) {
+        lbList.innerHTML = '<div class="lb-status">No scores yet — be the first!</div>';
+        return;
+      }
+      lbList.innerHTML = rows.map((r, i) => `
+        <div class="lb-row">
+          <span class="rank">#${i + 1}</span>
+          <span class="name">${escapeHtml(r.username)}</span>
+          <span class="pts">${r.score}</span>
+        </div>
+      `).join('');
+    } catch (e) {
+      lbList.innerHTML = '<div class="lb-status">Could not load leaderboard (offline?)</div>';
+    }
+  }
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function syncScore(username, score) {
+    if (FIREBASE_PROJECT_ID === 'YOUR_PROJECT_ID_HERE') return;
+    try {
+      const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/scores/${encodeURIComponent(username)}`;
+      const body = {
+        fields: {
+          username: { stringValue: username },
+          score: { integerValue: String(Math.floor(score)) },
+          updatedAt: { timestampValue: new Date().toISOString() }
+        }
+      };
+      const res = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error('Leaderboard sync failed:', res.status, errText);
+      } else {
+        console.log('Leaderboard synced:', username, score);
+      }
+    } catch (e) {
+      console.error('Leaderboard sync network error:', e.message);
+    }
+  }
+
+  document.getElementById('btnBoard').addEventListener('click', () => { boardOverlay.style.display = 'flex'; fetchLeaderboard(); });
+  document.getElementById('btnBoard2').addEventListener('click', () => { boardOverlay.style.display = 'flex'; fetchLeaderboard(); });
+  document.querySelectorAll('[data-close]').forEach(el => {
+    el.addEventListener('click', () => { document.getElementById(el.getAttribute('data-close')).style.display = 'none'; });
+  });
+
+  let W, H, DPR, groundY = 0;
+  function resize() {
+    DPR = window.devicePixelRatio || 1;
+    W = canvas.clientWidth = window.innerWidth;
+    H = canvas.clientHeight = window.innerHeight;
+    canvas.width = W * DPR; canvas.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    groundY = H * 0.72;
+  }
+  window.addEventListener('resize', resize);
+
+  function leafBlade(len, wid) {
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(wid, -len * 0.35, wid * 0.15, -len * 0.55);
+    ctx.quadraticCurveTo(wid * 0.55, -len * 0.6, 0, -len);
+    ctx.quadraticCurveTo(-wid * 0.55, -len * 0.6, -wid * 0.15, -len * 0.55);
+    ctx.quadraticCurveTo(-wid, -len * 0.35, 0, 0);
+    ctx.closePath(); ctx.fill();
+  }
+  function drawLeaf(x, y, scale, rotation, color, alpha) {
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(rotation); ctx.scale(scale, scale);
+    ctx.globalAlpha = alpha !== undefined ? alpha : 1;
+    ctx.fillStyle = color;
+    const blades = [
+      { len: 34, wid: 9, ang: 0 }, { len: 30, wid: 9, ang: 0.42 }, { len: 30, wid: 9, ang: -0.42 },
+      { len: 22, wid: 7, ang: 0.95 }, { len: 22, wid: 7, ang: -0.95 },
+      { len: 13, wid: 5, ang: 1.5 }, { len: 13, wid: 5, ang: -1.5 }
+    ];
+    blades.forEach(b => { ctx.save(); ctx.rotate(b.ang); leafBlade(b.len, b.wid); ctx.restore(); });
+    ctx.restore();
+  }
+
+  let bgLeaves = [];
+  function initBg() {
+    bgLeaves = [];
+    for (let i = 0; i < 26; i++) {
+      bgLeaves.push({
+        x: Math.random() * 2000, y: Math.random() * H,
+        scale: 0.4 + Math.random() * 1.1, rot: Math.random() * Math.PI * 2,
+        speedMul: 0.15 + Math.random() * 0.25, alpha: 0.06 + Math.random() * 0.08
+      });
+    }
+  }
+
+  let player, obstacles, speed, baseSpeed, gravity, score, running, gameOver, groundOffset, spawnTimer, startTime, holdJump;
+
+  function resetGame() {
+    player = { x: 90, y: groundY, vy: 0, w: 44, h: 44, onGround: true, rot: 0 };
+    obstacles = [];
+    baseSpeed = 6.2; speed = baseSpeed; gravity = 0.62;
+    score = 0; running = true; gameOver = false; groundOffset = 0; spawnTimer = 60;
+    startTime = performance.now(); holdJump = false;
+    scoreEl.textContent = '0';
+    gameoverEl.style.display = 'none';
+    refreshTopbar();
+  }
+
+  function jump() {
+    if (!running) return;
+    if (player.onGround) { player.vy = -13.5; player.onGround = false; holdJump = true; }
+  }
+
+  function spawnObstacle() {
+    const isTall = Math.random() < 0.35;
+    obstacles.push({
+      x: W + 40, w: isTall ? 30 : 26 + Math.random() * 10, h: isTall ? 60 : 34,
+      rot: 0, spin: (Math.random() - 0.5) * 0.06
+    });
+  }
+
+  function update() {
+    if (!running) return;
+    if (!player.onGround) {
+      const g = holdJump && player.vy < 0 ? gravity * 0.6 : gravity;
+      player.vy += g; player.y += player.vy;
+      if (player.y >= groundY) { player.y = groundY; player.vy = 0; player.onGround = true; }
+    }
+    player.rot = player.onGround ? Math.sin(performance.now() / 90) * 0.08 : -0.3;
+
+    const elapsed = (performance.now() - startTime) / 1000;
+    speed = baseSpeed + Math.min(elapsed * 0.09, 7);
+
+    spawnTimer -= 1;
+    if (spawnTimer <= 0) {
+      spawnObstacle();
+      spawnTimer = Math.max(28, 55 + Math.random() * 55 - Math.min(elapsed * 0.6, 35));
+    }
+
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      const o = obstacles[i];
+      o.x -= speed; o.rot += o.spin;
+      if (o.x + o.w < -20) obstacles.splice(i, 1);
+    }
+
+    for (const o of obstacles) {
+      const px = player.x + 8, py = player.y - player.h + 6, pw = player.w - 16, ph = player.h - 10;
+      const ox = o.x + 4, oy = groundY - o.h, ow = o.w - 8, oh = o.h;
+      if (px < ox + ow && px + pw > ox && py < oy + oh && py + ph > oy) { endGame(); break; }
+    }
+
+    groundOffset -= speed;
+    if (groundOffset < -40) groundOffset += 40;
+
+    bgLeaves.forEach(l => {
+      l.x -= speed * l.speedMul;
+      if (l.x < -60) l.x = W + 60 + Math.random() * 100;
+    });
+
+    score += speed * 0.045;
+    scoreEl.textContent = Math.floor(score);
+  }
+
+  function endGame() {
+    running = false; gameOver = true;
+    const finalScore = Math.floor(score);
+    const coinsEarned = Math.floor(finalScore / 5);
+    pdata.coins += coinsEarned;
+    if (finalScore > pdata.best) pdata.best = finalScore;
+    savePlayerData();
+    refreshTopbar();
+
+    finalScoreEl.textContent = `Score: ${finalScore}  ·  Best: ${pdata.best}`;
+    coinsEarnedEl.textContent = `+${coinsEarned} coins`;
+    gameoverEl.style.display = 'block';
+
+    if (pdata.username) syncScore(pdata.username, pdata.best);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#123018'); sky.addColorStop(1, '#0d1f12');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+
+    bgLeaves.forEach(l => drawLeaf(l.x, l.y, l.scale, l.rot, '#4caf50', l.alpha));
+
+    ctx.strokeStyle = 'rgba(180, 230, 170, 0.35)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, groundY + 2); ctx.lineTo(W, groundY + 2); ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(180, 230, 170, 0.18)'; ctx.lineWidth = 3;
+    for (let x = groundOffset; x < W; x += 40) {
+      ctx.beginPath(); ctx.moveTo(x, groundY + 14); ctx.lineTo(x + 20, groundY + 14); ctx.stroke();
+    }
+
+    obstacles.forEach(o => {
+      const cx = o.x + o.w / 2;
+      const scale = o.h / 55;
+      drawLeaf(cx, groundY, scale, o.rot, '#3fae4a', 0.95);
+      if (o.h > 45) drawLeaf(cx, groundY - o.h * 0.45, scale * 0.7, -o.rot * 1.3, '#68c96f', 0.9);
+    });
+
+    drawLeaf(player.x + player.w / 2, player.y, 1.05, player.rot, currentColor(), 1);
+
+    if (gameOver) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 0, W, H); }
+  }
+
+  function loop() { update(); draw(); requestAnimationFrame(loop); }
+
+  function onDown() {
+    if (usernameOverlay.style.display === 'flex' || storeOverlay.style.display === 'flex' || boardOverlay.style.display === 'flex') return;
+    if (gameOver) { resetGame(); return; }
+    jump();
+  }
+  function onUp() { holdJump = false; }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); onDown(); }
+  });
+  window.addEventListener('keyup', (e) => { if (e.code === 'Space' || e.code === 'ArrowUp') onUp(); });
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); onDown(); }, { passive: false });
+  canvas.addEventListener('touchend', (e) => { e.preventDefault(); onUp(); }, { passive: false });
+  canvas.addEventListener('mousedown', onDown);
+  canvas.addEventListener('mouseup', onUp);
+  document.getElementById('btnRestart').addEventListener('click', resetGame);
+
+  resize(); initBg(); refreshTopbar(); resetGame(); loop();
+})();
+</script>
+</body>
+</html>
